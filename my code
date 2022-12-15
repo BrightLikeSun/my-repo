@@ -1,0 +1,43 @@
+from nltk.sentiment.vader import SentimentIntensityAnalyzer
+import pandas as pd
+import matplotlib.pyplot as plt
+from urllib.request import urlopen, Request
+from bs4 import BeautifulSoup
+
+news_tables = {}
+
+finviz_url = 'https://finviz.com/quote.ashx?t='
+tickers = ['amzn','goog','aapl']
+
+for ticker in tickers:
+    url = finviz_url + ticker + '&p=d'
+    req = Request(url, headers={'user-agent':'my-app'})
+    req = urlopen(req)
+    soup = BeautifulSoup(req, 'html')
+    news = soup.find(id='news-table')
+    news_tables[ticker] = news
+    
+parsed_data = []
+
+for ticker, news in news_tables.items():
+    for row in news.findAll('tr'):
+        if row.a is not None:
+            title = row.a.text
+            date_data = row.td.text.split(' ')
+            
+            if len(date_data) == 1:
+                time = date_data[0]
+            else:
+                date = date_data[0]
+                time = date_data[1]
+            
+            parsed_data.append([ticker, date, time, title])
+            
+df = pd.DataFrame(parsed_data, columns=['ticker','date','time','title'])
+vader = SentimentIntensityAnalyzer()
+df['comp_score'] = df['title'].apply(lambda title: vader.polarity_scores(title)['compound'])
+df['neg_score'] = df['title'].apply(lambda title: vader.polarity_scores(title)['neg'])
+df['pos_score'] = df['title'].apply(lambda title: vader.polarity_scores(title)['pos'])
+df['neu_score'] = df['title'].apply(lambda title: vader.polarity_scores(title)['neu'])
+df['date'] = pd.to_datetime(df.date).dt.date
+df.to_csv('sample_data_polarity_scores.csv', encoding='utf-8')
